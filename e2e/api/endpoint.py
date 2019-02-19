@@ -66,7 +66,7 @@ class BasicEndpoint(base.ClassInfo):
         """Clone this endpoint, but with an extended URI from this one."""
         return self.__class__(self._api, self._extend_uri(uri))
 
-    def _extend_uri(self, uri_extension: Union[int, str] = None) -> str:
+    def _extend_uri(self, uri_extension: Union[int, str] = '') -> str:
         slashify = self.uri.endswith('/')
         str_id = str(uri_extension)
         return self.uri if not uri_extension else '{}/{}{}'.format(

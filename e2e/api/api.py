@@ -17,11 +17,11 @@ any service-specific behaviour. For example,
 - Extra health checks on responses (e.g. if a ``res.success` is ``False``).
 """
 
-import logging
 import json
-import textwrap
+import logging
 import pprint
 import re
+import textwrap
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -55,9 +55,10 @@ class RestApi(base.ClassInfo):
 
     Args:
         api_root: Root of the REST API to be used, e.g. 'http://myservice.com'
-        timeout: Number of seconds to be used as the Session's timeout.
         session: Optional `requests.Session` to be used instead of a new one.
             You can use this to share one session across services, for example.
+        persistent_kwargs: Optional :meth:`requests.Session.request` kwargs
+            which will be used for all requests made by this RestApi.
     """
 
     class ExcFormatter():
@@ -87,11 +88,11 @@ class RestApi(base.ClassInfo):
 
     def __init__(self,
                  api_root: str,
-                 timeout: float = 10.0,
-                 session: Optional[requests.Session] = None) -> None:
+                 session: Optional[requests.Session] = None,
+                 **persistent_kwargs: Any) -> None:
         self._session = session if session is not None else requests.Session()
         self._api_root = api_root
-        self._timeout = timeout
+        self._persistent_kwargs = {'timeout': 10.0, **persistent_kwargs}
 
     @property
     def url(self) -> str:
@@ -157,9 +158,11 @@ class RestApi(base.ClassInfo):
         exp_status_codes = (expected_status,) if isinstance(
             expected_status, int) else expected_status
 
-        # Default timeout
-        args_to_pass = {'timeout': self._timeout}  # type: Dict[str, Any]
-        args_to_pass.update(kwargs)
+        # Default persistent arguments + the desired kwargs for this request.
+        args_to_pass = {
+            **self._persistent_kwargs,
+            **kwargs
+        }  # type: Dict[str, Any]
 
         LOGGER.debug("%s %s", method, uri)
 
@@ -172,7 +175,7 @@ class RestApi(base.ClassInfo):
 
             msg = "Exception raised on '{} {}'\n".format(method, req_url)
             msg += "    Request params (next line):\n        {}\n".format(
-                kwargs if kwargs else "")
+                args_to_pass if args_to_pass else "")
             msg += "    Exception (next line):\n        {}: {}".format(
                 base.ClassInfo.fqualname_of(e), str(e))
             raise exceptions.IncompleteRequestError(msg) from e
@@ -181,13 +184,14 @@ class RestApi(base.ClassInfo):
             msg = "Unexpected status ({} {}) from '{} {}'\n".format(
                 r.status_code, r.reason, method, req_url)
             msg += "    Request params (next line):\n        {}\n".format(
-                pprint.pformat(kwargs, indent=4))
+                pprint.pformat(args_to_pass, indent=4))
 
             try:
                 res_body = 'JSON', RestApi.ExcFormatter.format(
                     pprint.pformat(r.json(), indent=4), 2)
             except json.JSONDecodeError:
-                res_body = 'text', RestApi.ExcFormatter.format(r.content, 2)
+                res_body = 'text', RestApi.ExcFormatter.format(
+                    str(r.content), 2)
             msg += "    Response {} (next line):\n{}\n".format(*res_body)
 
             if status_msg:
@@ -272,5 +276,10 @@ class RestApi(base.ClassInfo):
         return '{}({})'.format(self.__class__.__qualname__, self.url)
 
     def __repr__(self) -> str:
-        return '{}({}, timeout={})'.format(self.__fqualname__, repr(self.url),
-                                           repr(self._timeout))
+        # XXX: Sort the dictionary so we get consistent results since not all
+        # versions of python3 guarantee order.
+        sorted_kwargs = sorted(self._persistent_kwargs.items())
+        kwargs_str = ', '.join(
+            '{}={}'.format(k, repr(v)) for k, v in sorted_kwargs)
+        return '{}({}, {})'.format(self.__fqualname__, repr(self.url),
+                                   kwargs_str)
