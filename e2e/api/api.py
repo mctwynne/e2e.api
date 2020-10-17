@@ -97,7 +97,7 @@ class RestApi(base.ClassInfo):
     ) -> None:
         self._session = session if session is not None else requests.Session()
         self._api_root = api_root
-        self._persistent_kwargs = {'timeout': timeout, **persistent_kwargs}
+        self._persistent_kwargs = {"timeout": timeout, **persistent_kwargs}
 
     @property
     def url(self) -> str:
@@ -167,10 +167,7 @@ class RestApi(base.ClassInfo):
         )
 
         # Default persistent arguments + the desired kwargs for this request.
-        args_to_pass: Dict[str, Any] = {
-            **self._persistent_kwargs,
-            **kwargs
-        }
+        args_to_pass: Dict[str, Any] = {**self._persistent_kwargs, **kwargs}
 
         LOGGER.debug("%s %s", method, uri)
 
@@ -309,6 +306,5 @@ class RestApi(base.ClassInfo):
         # Sort the dictionary so we get consistent results since not all
         # versions of python3 guarantee order.
         sorted_kwargs = sorted(self._persistent_kwargs.items())
-        kwargs_str = ", ".join(
-            "{}={}".format(k, repr(v)) for k, v in sorted_kwargs)
+        kwargs_str = ", ".join("{}={}".format(k, repr(v)) for k, v in sorted_kwargs)
         return "{}({}, {})".format(self.__fqualname__, repr(self.url), kwargs_str)
